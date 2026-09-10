@@ -1,0 +1,10 @@
+dbt-core>=1.8
+dbt-duckdb>=1.8
+duckdb>=1.0
+pandas>=2.0
+numpy>=1.24
+faker>=20.0
+streamlit>=1.30
+plotly>=5.18
+openai>=1.0
+pyyaml>=6.0

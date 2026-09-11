@@ -1,0 +1,16 @@
+version: 2
+
+models:
+  - name: fct_trials
+    description: "One row per trial that was ever started."
+    columns:
+      - name: trial_transaction_id
+        tests: [unique, not_null]
+      - name: user_id
+        tests: [not_null]
+
+  - name: fct_revenue_daily
+    description: "Daily revenue by store and product."
+    columns:
+      - name: date
+        tests: [not_null]

@@ -2,15 +2,45 @@ version: 2
 
 models:
   - name: fct_trials
-    description: "One row per trial that was ever started."
+    description: >
+      One row per trial that was ever started. THE authoritative source for
+      any question about trial volume or trial-to-paid conversion.
+
+      Metric definitions and known gotchas:
+        - `is_countable_trial`: use this, not a raw row count, when anyone
+          asks "how many trials did we start." It excludes trials cancelled
+          the same day they began (accidental starts / instant cancels),
+          which is what "trial start" means in every business review this
+          data has ever been used for. About 12% of raw trial_start events
+          fail this filter.
+        - `converted`: true only if the trial has a linked trial_convert
+          event. A trial that is still within its trial window (neither
+          converted nor cancelled yet) will show converted = false; don't
+          read that as "this trial failed" without also checking whether
+          the trial window has actually closed.
+        - `days_to_convert`: null for trials that never converted.
     columns:
       - name: trial_transaction_id
+        description: "Primary key: the original trial_start transaction."
         tests: [unique, not_null]
       - name: user_id
         tests: [not_null]
+      - name: is_same_day_cancel
+        description: "True if the trial was cancelled the same calendar day it started."
+      - name: is_countable_trial
+        description: >
+          The metric to use for "trial starts." False for same-day cancels.
+          Always filter on this column rather than counting raw rows.
+      - name: converted
+        description: "True if this trial has a matching trial_convert event."
 
   - name: fct_revenue_daily
-    description: "Daily revenue by store and product."
+    description: >
+      Daily revenue, split by store and product. Only has tracked_revenue
+      for now -- see the next commit for the realized_revenue split, which
+      turned out to matter a lot once refunds entered the picture.
     columns:
       - name: date
         tests: [not_null]
+      - name: tracked_revenue
+        description: "Gross revenue recognized at transaction time, before refunds/fees."

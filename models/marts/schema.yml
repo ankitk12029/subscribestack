@@ -36,11 +36,28 @@ models:
 
   - name: fct_revenue_daily
     description: >
-      Daily revenue, split by store and product. Only has tracked_revenue
-      for now -- see the next commit for the realized_revenue split, which
-      turned out to matter a lot once refunds entered the picture.
+      Daily revenue, split by store and product, in two flavors that answer
+      two different questions:
+
+        - `tracked_revenue`: what we recognized at the moment of each charge
+          (trial_convert / renewal), BEFORE we know if it will be refunded.
+          This is the number that matches what you'd see in a "gross sales"
+          or "bookings" report on the day of the transaction.
+        - `realized_revenue`: tracked_revenue, net of any refund or
+          chargeback that references it, AND net of the store's fee
+          (15% for App Store / Play Store, 2.9% for Stripe). This is the
+          number that matches what actually lands as usable revenue.
+
+      Critically: a refund that happens on March 20th for a charge that
+      happened on March 1st is netted back into MARCH 1ST's realized_revenue
+      here, not March 20th's. If you sum realized_revenue by the refund's
+      own date instead, you will see revenue swings on days where nothing
+      was actually sold -- that's the "why did revenue drop with no sales"
+      question this table exists to prevent.
     columns:
       - name: date
         tests: [not_null]
       - name: tracked_revenue
         description: "Gross revenue recognized at transaction time, before refunds/fees."
+      - name: realized_revenue
+        description: "Net revenue after refunds, chargebacks, and store fees, attributed to the ORIGINAL transaction date."

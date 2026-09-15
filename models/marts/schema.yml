@@ -61,3 +61,15 @@ models:
         description: "Gross revenue recognized at transaction time, before refunds/fees."
       - name: realized_revenue
         description: "Net revenue after refunds, chargebacks, and store fees, attributed to the ORIGINAL transaction date."
+
+  - name: fct_conversion_funnel
+    description: >
+      Monthly trial -> paid conversion funnel by acquisition channel and
+      country. Built on top of fct_trials' `is_countable_trial` filter, so
+      conversion_rate_pct is never inflated or deflated by same-day-cancel
+      noise -- you do not need to remember to add that filter yourself.
+    columns:
+      - name: countable_trials
+        description: "Trials excluding same-day cancels. See fct_trials.is_countable_trial."
+      - name: conversion_rate_pct
+        description: "conversions / countable_trials * 100, rounded to 2 decimals."

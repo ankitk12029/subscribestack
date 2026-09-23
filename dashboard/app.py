@@ -7,9 +7,11 @@ gotchas baked into the underlying models; that knowledge already lives in
 dbt, not in this file.
 """
 
+import json
 import os
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 import duckdb
@@ -19,8 +21,63 @@ import streamlit as st
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 DB_PATH = REPO_ROOT / "target" / "warehouse.duckdb"
+sys.path.insert(0, str(REPO_ROOT / "agent"))
 
 st.set_page_config(page_title="SubscribeStack", layout="wide")
+
+# ---------------------------------------------------------------------------
+# Public "Ask AI" toggle. Off by default -- must be explicitly turned on via
+# Streamlit Secrets (Settings -> Secrets in Streamlit Community Cloud), which
+# takes effect within seconds and needs no redeploy. This is the switch to
+# flip to pause public LLM access without touching code.
+#
+#   LLM_PUBLIC_ENABLED = true
+#   OPENAI_API_KEY = "sk-..."
+#   LLM_DAILY_LIMIT = 50        # optional, defaults below
+#   LLM_SESSION_LIMIT = 5       # optional, defaults below
+# ---------------------------------------------------------------------------
+def _get_secret(key: str, default=None):
+    """st.secrets raises StreamlitSecretNotFoundError if no secrets.toml
+    exists at all (not just if the key is missing) -- e.g. on a fresh local
+    checkout with no secrets configured yet. Treat "no secrets file" the
+    same as "key not set" so the app runs fine locally with LLM features off.
+    """
+    try:
+        return st.secrets.get(key, default)
+    except st.errors.StreamlitSecretNotFoundError:
+        return default
+
+
+LLM_PUBLIC_ENABLED = str(_get_secret("LLM_PUBLIC_ENABLED", "false")).lower() == "true"
+LLM_DAILY_LIMIT = int(_get_secret("LLM_DAILY_LIMIT", 50))
+LLM_SESSION_LIMIT = int(_get_secret("LLM_SESSION_LIMIT", 5))
+USAGE_LOG_PATH = REPO_ROOT / "target" / "llm_usage.json"
+
+_openai_key = _get_secret("OPENAI_API_KEY")
+if LLM_PUBLIC_ENABLED and _openai_key:
+    os.environ["OPENAI_API_KEY"] = _openai_key
+
+
+def _load_usage() -> dict:
+    today = str(date.today())
+    if USAGE_LOG_PATH.exists():
+        try:
+            data = json.loads(USAGE_LOG_PATH.read_text())
+        except (json.JSONDecodeError, OSError):
+            data = {}
+    else:
+        data = {}
+    if data.get("date") != today:
+        data = {"date": today, "count": 0}
+    return data
+
+
+def _record_usage() -> int:
+    data = _load_usage()
+    data["count"] += 1
+    USAGE_LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    USAGE_LOG_PATH.write_text(json.dumps(data))
+    return data["count"]
 
 
 def build_warehouse():
@@ -122,3 +179,55 @@ st.divider()
 st.subheader("Revenue by store")
 by_store = revenue.groupby("store")[["tracked_revenue", "realized_revenue"]].sum().reset_index()
 st.dataframe(by_store, use_container_width=True, hide_index=True)
+
+st.divider()
+st.subheader("Ask the warehouse (AI-generated SQL, independently verified)")
+
+if not LLM_PUBLIC_ENABLED:
+    st.info(
+        "AI-generated answers are currently paused. The dashboard is still "
+        "fully live above -- this section just isn't accepting free-form "
+        "questions right now."
+    )
+else:
+    usage = _load_usage()
+    session_count = st.session_state.get("llm_session_count", 0)
+
+    if usage["count"] >= LLM_DAILY_LIMIT:
+        st.warning("Daily AI question limit reached. Please check back tomorrow.")
+    elif session_count >= LLM_SESSION_LIMIT:
+        st.warning(f"You've hit the per-session limit ({LLM_SESSION_LIMIT} questions). Refresh to reset.")
+    else:
+        st.caption(
+            f"Questions today: {usage['count']}/{LLM_DAILY_LIMIT} · "
+            f"Your session: {session_count}/{LLM_SESSION_LIMIT}. "
+            "Every answer is cross-checked against a hand-written reference "
+            "query before being shown -- see agent/reference_checks.py."
+        )
+        question = st.text_input("Ask a question about trials, conversion, or revenue:")
+        if st.button("Ask") and question.strip():
+            from agent import ask  # noqa: E402 - imported lazily, only when used
+
+            with st.spinner("Generating and verifying SQL..."):
+                result = ask(question.strip())
+            st.session_state["llm_session_count"] = session_count + 1
+            _record_usage()
+
+            st.code(result.get("sql", "(none)"), language="sql")
+            if result.get("error"):
+                st.error(result["error"])
+            st.write(f"**Answer:** {result.get('answer')}")
+
+            v = result.get("verification")
+            if v is None:
+                st.caption("Verification: n/a (no SQL executed)")
+            elif v.get("verified") is None:
+                st.caption(f"Verification: unverified -- {v.get('note')}")
+            elif v["verified"]:
+                st.success(f"Verified against reference (diff={v['pct_diff']}%): {v['note']}")
+            else:
+                st.error(
+                    f"FLAGGED -- agent={v.get('agent_value')}, "
+                    f"reference={v.get('reference_value')}, diff={v.get('pct_diff', 'n/a')}%. "
+                    f"{v['note']}"
+                )

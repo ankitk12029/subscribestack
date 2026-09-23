@@ -66,7 +66,20 @@ OPENAI_API_KEY=sk-... python3 agent/agent.py "How many trials converted in June 
 streamlit run dashboard/app.py
 ```
 
-`~/.dbt/profiles.yml` needs a `subscribestack` profile pointing dbt-duckdb at a local file — see the profile block in this repo's setup notes, or dbt-duckdb's own docs.
+The dashboard (`dashboard/app.py`) builds `target/warehouse.duckdb` itself on first load if it doesn't exist yet, so steps 1-2 are optional if you're only running the dashboard (e.g. on a fresh Streamlit Community Cloud deploy). The CLI agent (`agent/agent.py`) does not auto-build the warehouse — run `dbt build` first if you're using it standalone.
+
+### Public "Ask AI" mode (optional, off by default)
+
+The dashboard has an LLM-backed "Ask the warehouse" section that's paused by default. To turn it on (e.g. on Streamlit Community Cloud), add to that app's **Settings → Secrets**:
+
+```toml
+LLM_PUBLIC_ENABLED = "true"
+OPENAI_API_KEY = "sk-..."
+LLM_DAILY_LIMIT = 50       # optional, caps total questions/day across all visitors
+LLM_SESSION_LIMIT = 5      # optional, caps questions per browser session
+```
+
+Set `LLM_PUBLIC_ENABLED` back to `"false"` (or delete it) to pause it again — takes effect within seconds, no redeploy needed. The dashboard's charts work the same either way; only the free-form question box is gated.
 
 ## What I'd do next with more time
 

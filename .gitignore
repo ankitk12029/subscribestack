@@ -9,3 +9,4 @@ __pycache__/
 venv/
 .env
 .user.yml
+.streamlit/secrets.toml

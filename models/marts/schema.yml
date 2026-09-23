@@ -56,11 +56,20 @@ models:
       question this table exists to prevent.
     columns:
       - name: date
+        description: "The original transaction date this row's revenue is attributed to (see note above on refund netting)."
         tests: [not_null]
+      - name: store
+        description: "Which storefront processed the charge: app_store, play_store, or stripe. Drives the fee rate netted into realized_revenue."
+      - name: product_id
+        description: "The subscription product/SKU charged, e.g. monthly_basic, annual_pro."
+      - name: charge_count
+        description: "Number of charge transactions (trial_convert + renewal) rolled into this row."
       - name: tracked_revenue
         description: "Gross revenue recognized at transaction time, before refunds/fees."
       - name: realized_revenue
         description: "Net revenue after refunds, chargebacks, and store fees, attributed to the ORIGINAL transaction date."
+      - name: reversed_charge_count
+        description: "Number of charges in this row that were later refunded or charged back."
 
   - name: fct_conversion_funnel
     description: >
@@ -68,8 +77,26 @@ models:
       country. Built on top of fct_trials' `is_countable_trial` filter, so
       conversion_rate_pct is never inflated or deflated by same-day-cancel
       noise -- you do not need to remember to add that filter yourself.
+      This table has no revenue columns -- it only counts trials and
+      conversions, split by channel/country/month. There is no join in
+      this project from revenue to acquisition_channel; questions asking
+      for "revenue by channel" cannot be answered from any documented mart.
     columns:
+      - name: trial_start_month
+        description: >
+          The month (first-of-month date) the trial started in. This is
+          the date column to filter/group on for this table -- there is
+          no column literally named "date" here.
+        tests: [not_null]
+      - name: acquisition_channel
+        description: "How the user was acquired, e.g. organic, paid_social, paid_search, referral, influencer."
+      - name: country
+        description: "User's country (ISO-ish code, e.g. US, GB, DE)."
       - name: countable_trials
         description: "Trials excluding same-day cancels. See fct_trials.is_countable_trial."
+      - name: conversions
+        description: "Count of countable_trials that converted to paid."
       - name: conversion_rate_pct
         description: "conversions / countable_trials * 100, rounded to 2 decimals."
+      - name: avg_days_to_convert
+        description: "Average days between trial start and conversion, for trials that converted."

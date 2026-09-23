@@ -14,11 +14,12 @@ silently returning the (possibly wrong) number.
 
 import re
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Callable, Optional
 
 import duckdb
 
-DB_PATH = "/tmp/subscribestack/warehouse.duckdb"
+DB_PATH = str(Path(__file__).resolve().parents[1] / "target" / "warehouse.duckdb")
 TOLERANCE_PCT = 0.5  # percent difference allowed before flagging a mismatch
 
 

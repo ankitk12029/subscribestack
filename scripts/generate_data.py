@@ -17,7 +17,7 @@ semantic layer needs to get right:
      structures, which is exactly the kind of "why tracked and realized
      revenue are different" detail a domain expert has to know.
 
-No real RevenueCat data is used or implied anywhere in this project --
+No real company's data is used or implied anywhere in this project --
 everything below is synthetic and generated with a fixed random seed for
 reproducibility.
 """

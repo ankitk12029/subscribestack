@@ -7,19 +7,55 @@ gotchas baked into the underlying models; that knowledge already lives in
 dbt, not in this file.
 """
 
+import os
+import subprocess
+import sys
+from pathlib import Path
+
 import duckdb
 import pandas as pd
 import plotly.express as px
 import streamlit as st
 
-DB_PATH = "/tmp/subscribestack/warehouse.duckdb"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+DB_PATH = REPO_ROOT / "target" / "warehouse.duckdb"
 
 st.set_page_config(page_title="SubscribeStack", layout="wide")
 
 
+def build_warehouse():
+    """Generate synthetic data and run dbt if the warehouse doesn't exist yet.
+
+    Lets a fresh checkout (e.g. Streamlit Community Cloud, which has no
+    pre-built .duckdb file and no ~/.dbt/profiles.yml) become servable with
+    no manual setup step and nothing but synthetic data baked into git.
+    """
+    env = {**os.environ, "DBT_PROFILES_DIR": str(REPO_ROOT)}
+    with st.spinner("First run: generating synthetic data and building the warehouse..."):
+        subprocess.run(
+            [sys.executable, str(REPO_ROOT / "scripts" / "generate_data.py")],
+            cwd=REPO_ROOT,
+            check=True,
+        )
+        subprocess.run(
+            ["dbt", "seed"],
+            cwd=REPO_ROOT,
+            env=env,
+            check=True,
+        )
+        subprocess.run(
+            ["dbt", "build"],
+            cwd=REPO_ROOT,
+            env=env,
+            check=True,
+        )
+
+
 @st.cache_data(ttl=300)
 def load_data():
-    con = duckdb.connect(DB_PATH, read_only=True)
+    if not DB_PATH.exists():
+        build_warehouse()
+    con = duckdb.connect(str(DB_PATH), read_only=True)
     revenue = con.execute("select * from main.fct_revenue_daily").fetchdf()
     funnel = con.execute("select * from main.fct_conversion_funnel").fetchdf()
     trials = con.execute("select * from main.fct_trials").fetchdf()

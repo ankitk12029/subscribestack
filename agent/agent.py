@@ -17,17 +17,20 @@ part of this project) can be demonstrated without needing API access. This
 is announced loudly in the output -- it is never silently substituted.
 """
 
+from __future__ import annotations
+
 import argparse
 import os
 import re
 import sys
+from pathlib import Path
 
 import duckdb
 
 from reference_checks import verify
 from semantic_context import build_system_prompt
 
-DB_PATH = "/tmp/subscribestack/warehouse.duckdb"
+DB_PATH = str(Path(__file__).resolve().parents[1] / "target" / "warehouse.duckdb")
 
 # ---------------------------------------------------------------------------
 # Offline demo library: canned (question_substring -> SQL) pairs used only

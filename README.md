@@ -1,8 +1,8 @@
 # SubscribeStack
 
-A subscription-analytics semantic layer + AI-agent verification harness, built on synthetic data to explore the kind of work described in RevenueCat's Data Analyst job posting.
+A subscription-analytics semantic layer + AI-agent verification harness, built on synthetic data to explore the kind of work described in a typical subscription-analytics Data Analyst job posting.
 
-**No RevenueCat data — real or otherwise — is used anywhere in this project.** Every row of every dataset here is synthetically generated (`scripts/generate_data.py`, fixed random seed). The domain gotchas are modeled after the *shape* of problems the job posting itself describes, not any real company's actual data or definitions.
+**No real company's data — real or otherwise — is used anywhere in this project.** Every row of every dataset here is synthetically generated (`scripts/generate_data.py`, fixed random seed). The domain gotchas are modeled after the *shape* of problems such job postings describe, not any real company's actual data or definitions.
 
 ## Why this project exists
 
@@ -48,10 +48,14 @@ Run `python3 agent/agent.py --demo` to see this catch a real mistake: one of the
 python3 -m venv venv && source venv/bin/activate
 pip install -r requirements.txt
 
+# This repo ships its own profiles.yml (dbt normally looks in ~/.dbt/), so
+# point dbt at it for every dbt command below:
+export DBT_PROFILES_DIR=$(pwd)
+
 # 1. Generate the synthetic data
 python3 scripts/generate_data.py
 
-# 2. Build the dbt project (creates warehouse.duckdb, runs models + tests)
+# 2. Build the dbt project (creates target/warehouse.duckdb, runs models + tests)
 dbt build
 
 # 3. Ask the agent questions

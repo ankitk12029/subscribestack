@@ -11,10 +11,12 @@ with no separate prompt file to remember to edit.
 
 from pathlib import Path
 
+import duckdb
 import yaml
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 MARTS_SCHEMA = PROJECT_ROOT / "models" / "marts" / "schema.yml"
+DB_PATH = PROJECT_ROOT / "target" / "warehouse.duckdb"
 
 # Only these models are considered "safe to query" -- the agent is
 # instructed to never query stg_ or raw_ tables directly, because those
@@ -42,8 +44,36 @@ def load_semantic_context() -> str:
     return "\n\n".join(blocks)
 
 
+def load_data_date_range() -> str:
+    """Query the live warehouse for the actual min/max dates covered.
+
+    Without this, the LLM has no way to know what period the data spans
+    and will guess -- observed in practice guessing a date range that has
+    nothing to do with the actual synthetic data, then confidently telling
+    the user the data "only goes up to" a made-up cutoff. Querying the
+    warehouse directly means this never drifts out of sync as more
+    synthetic data is generated.
+    """
+    if not DB_PATH.exists():
+        return "unknown -- warehouse not yet built"
+    con = duckdb.connect(str(DB_PATH), read_only=True)
+    try:
+        min_date, max_date = con.execute(
+            "select min(date), max(date) from main.fct_revenue_daily"
+        ).fetchone()
+    finally:
+        con.close()
+    if min_date is None:
+        return "unknown -- no rows in fct_revenue_daily"
+    return f"{min_date} to {max_date}"
+
+
 SYSTEM_PROMPT_TEMPLATE = """You are a SQL analyst agent for a subscription business, running \
 against a local DuckDB warehouse (dialect: DuckDB SQL, mostly Postgres-compatible).
+
+The data in this warehouse covers: {data_date_range}. If a question asks about a date \
+outside this range, do not guess or assume a different cutoff -- answer using the actual \
+range above, e.g. "-- CANNOT_ANSWER: no data exists after <max_date>."
 
 You may ONLY query these tables, using ONLY the columns and definitions given below. \
 These definitions encode business logic that is NOT visible from the column names alone \
@@ -62,7 +92,10 @@ Rules:
 
 
 def build_system_prompt() -> str:
-    return SYSTEM_PROMPT_TEMPLATE.format(semantic_context=load_semantic_context())
+    return SYSTEM_PROMPT_TEMPLATE.format(
+        semantic_context=load_semantic_context(),
+        data_date_range=load_data_date_range(),
+    )
 
 
 if __name__ == "__main__":

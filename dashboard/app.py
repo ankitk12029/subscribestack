@@ -216,7 +216,19 @@ else:
             st.code(result.get("sql", "(none)"), language="sql")
             if result.get("error"):
                 st.error(result["error"])
-            st.write(f"**Answer:** {result.get('answer')}")
+
+            answer = result.get("answer")
+            if isinstance(answer, list):
+                # Multi-row results (e.g. "revenue by month") come back as a
+                # list of row dicts rather than a single number -- render as
+                # an actual table instead of dumping the raw Python list.
+                st.write("**Answer:**")
+                if answer:
+                    st.dataframe(pd.DataFrame(answer), use_container_width=True, hide_index=True)
+                else:
+                    st.caption("(no rows returned)")
+            else:
+                st.write(f"**Answer:** {answer}")
 
             v = result.get("verification")
             if v is None:
